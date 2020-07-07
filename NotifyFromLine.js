@@ -10,16 +10,19 @@ function main() {
   var today = new Date();
   var sheetObj = setSheetInformation(id, sheetName);
 　var lastRow = getLastRow(sheetObj, 'A9:A36');
+  Logger.log(lastRow);
 
   var summaryRange = sheetObj.getRange(2,13,6,1);
   var detailRange = sheetObj.getRange(9,1,36,14);
   sendHeader(today);
   waitUntilGetValues(detailRange);
-  sendSummary(summaryRange);
-  sendDetails(detailRange, lastRow);
+  sendSummary(today, summaryRange);
+  sendDetails(today, detailRange, lastRow);
+  sendFooter();
 }
 
 function sendHttpPost(message){
+  if (!message) { return; }
   //取得・更新対象のシートを選択。
   var id = '112hbvHpRtZL9TkbaaprEnLlsfr2z6d8CUIkBpK-x4G0';
   var sheetName = '購入株';
@@ -34,11 +37,11 @@ function sendHttpPost(message){
      "headers" : {"Authorization" : "Bearer "+ ACCESS_TOKEN}
    };
 
-   UrlFetchApp.fetch("https://notify-api.line.me/api/notify",options);
+   UrlFetchApp.fetch("https://notify-api.line.me/api/notify", options);
 }
 
 function notifyFromLine(){
-  Logger.log("NotifyFromLine処理を開始します。");
+  Logger.log("NotifyFromLine処理を開始");
   var count = 0;
   var limit = 10;
   var sleep = 1000;
@@ -49,7 +52,7 @@ function notifyFromLine(){
   var ss = SpreadsheetApp.openById('112hbvHpRtZL9TkbaaprEnLlsfr2z6d8CUIkBpK-x4G0');
   var objSheet = ss.getSheetByName("購入株");
   
-  Logger.log("対象シートの情報を取得します。");
+  Logger.log("対象シートの情報を取得");
   // サマリーを取得 (3行目から6行:13列目から13列)
   // 詳細を取得 (9行目から36行:1列から14列目)
   // var summaryRange = objSheet.getRange(3,13,6,1);
@@ -65,7 +68,7 @@ function notifyFromLine(){
       break;
     }; 
   };
-  Logger.log("対象シートの情報取得が完了しました。");
+  Logger.log("対象シートの情報取得が完了");
   
   // var summaryBuyStock = summaryRange.getValues();
   var detailBuyStock = detailRange.getValues();
@@ -124,7 +127,7 @@ function setSheetInformation(id, name) {
 
 function sendHeader(today) {
   Logger.log("sendHeader処理を開始");
-  var message = "よっこいしょっと。\n"
+  var message = "\nよっこいしょっと。\n"
                 + "そろそろ" + Utilities.formatDate(today,"JST","MM月dd日") + "の株価をお知らせの時間ですな。\n";
   sendHttpPost(message);
 }
@@ -158,36 +161,60 @@ function waitUntilGetValues(targetRange) {
  * ※ 取得不可な株価があるため、正しい結果が返らないため、使用なし。
  * @param {*} summaryRange 
  */
-function sendSummary(summaryRange) {
+function sendSummary(today, summaryRange) {
   // サマリーを取得 (2行目から6行:13列目から13列)
   var summaryValues = summaryRange.getValues();
-  var message = "まずは、株価のサマリーを送るんじゃ。\n";
-  message = message +
-      // "投資可能金額　: " + separate(parseInt(detailBuyStock[2][1],10)) + "円\n" +
-      // "合計投資金額　: " + separate(parseInt(detailBuyStock[3][1],10)) + "円\n" +
-      "現在評価額　　: " + separate(parseInt(summaryValues[4][1],10)) + "円\n" +
-      "合計損益　　　: " + separate(parseInt(summaryValues[5][1],10)) + "円\n" +
-      "損益率　　　　: " + (summaryValues[6][1]*100).toFixed(1) + " \% \n";
+  var todayStr = Utilities.formatDate(today,"JST","MM/dd");
+  var message = "\nまずは、" + todayStr + "の株価のサマリーを送るんじゃ。\n";
+  message = message + "\n ======[ 株サマリー ]======\n" +
+      // "投資可能金額　: " + separate(parseInt(detailBuyStock[0][0],10)) + "円\n" +
+      // "合計投資金額　: " + separate(parseInt(detailBuyStock[1][1],10)) + "円\n" +
+      "現在評価額　　: " + separate(parseInt(summaryValues[2][0],10)) + "円\n" +
+      "合計損益　　　: " + separate(parseInt(summaryValues[3][0],10)) + "円\n" +
+      "損益率　　　　: " + (summaryValues[4][0] * 100).toFixed(1) + "％ \n" +
+      "======================\n";
   sendHttpPost(message);
 }
 
-function　sendDetails(detailRange, lastRow) {
+/**
+ * 
+ * @param {*} detailRange 
+ * @param {*} lastRow 
+ */
+function　sendDetails(today, detailRange, lastRow) {
   var detailValues = detailRange.getValues();
-  var message = "よっこいしょと。\n";
+  var todayStr = Utilities.formatDate(today,"JST","MM/dd");
+  // var message = "\nよっこいしょと。\n";
   for(var i=0; i < lastRow; i++){
-    message = message + "\n ======[ " + detailValues[i][0] + " ]======\n" +
+    var message = "\n" + todayStr +  "( " + (i + 1)  + "/" + (lastRow) + " )\n" +
+        "========[ " + detailValues[i][0] + " ]========\n" +
         "銘柄　　　: "+ detailValues[i][1] + "\n" +
         "現在価格　: " + detailValues[i][5] + "円\n" +
-        "前日比　　: " + detailValues[i][8] + "円 (" + Number(detailBuyStock[i][9]).toFixed(1) + "pct)\n" + 
+        "前日比　　: " + detailValues[i][8] + "円 (" + Number(detailValues[i][9]).toFixed(1) + "％)\n" + 
         "損益　　　: "+ separate(parseInt(detailValues[i][10],10)) + "円\n" +
-        "損益率　　: " + (detailValues[i][11]*100).toFixed(1) + " \% \n" +
-        "目標まで　: "+ detailValues[i][12] + " (" + detailValues[i][13] + " )\n\n";
+        "損益率　　: " + (detailValues[i][11]*100).toFixed(1) + "％ \n" +
+        "目標まで　: "+ detailValues[i][12] + " (" + detailValues[i][13] + " )\n" +
+        "======================\n";
     sendHttpPost(message);
   }
-  message = "ふう、おつかれおつかれ。では、明日もがんばるんじゃぞ。";
+}
+
+function sendCloseClosingDate() {
+  
+}
+
+/**
+ * 
+ */
+function sendFooter() {
+  var message = "\nふう、おつかれおつかれ。\nでは、明日もがんばるんじゃぞ。";
   sendHttpPost(message);
 }
 
+/**
+ * 
+ * @param {*} num 
+ */
 function separate(num){
     return String(num).replace( /(\d)(?=(\d\d\d)+(?!\d))/g, '$1,');
 }
@@ -196,8 +223,9 @@ function separate(num){
  * 最終行を取得
  * @param {*} sheetObj 
  * @param {*} range 
+ * @return {Number}
  */
 function getLastRow(sheetObj, range) {
   var checkLastRows = sheetObj.getRange(range).getValues();
-  var lastRow = checkLastRows.filter(String).length;
+  return checkLastRows.filter(String).length;
 }
